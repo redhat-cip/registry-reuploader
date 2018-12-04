@@ -23,7 +23,7 @@ def empty_blobs():
         if o['content_length']:
             continue
     
-        yield (path, path.split('/')[7], o['object_manifest'])
+        yield (path, path.split('/')[7])
 
 def find_image(blob):
     for k in redis_session.keys():
@@ -36,7 +36,7 @@ def find_image(blob):
         return "%s/%s" % (splitted[5], splitted[6])
 
 
-for path, blob, manifest_path in empty_blobs():
+for path, blob in empty_blobs():
     print(path)
     print(blob)
     image = find_image(blob)
@@ -47,9 +47,9 @@ for path, blob, manifest_path in empty_blobs():
     if digest != blob:
         print('Invalid content!: %s %s' % (path, blob))
         continue
-    print('Reuploading %s' % path)
+
     ret = conn.object_store.upload_object(
             container="dci_registry",
-            name=manifest_path,
+            name=path,
             data=r.content)
     redis_session.delete(path)
