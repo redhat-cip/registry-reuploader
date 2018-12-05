@@ -37,9 +37,8 @@ def find_image(blob):
 
 
 for path, blob in empty_blobs():
-    print(path)
-    print(blob)
     image = find_image(blob)
+    print('Reuploading %s' % image)
     url = 'https://docker-registry.engineering.redhat.com/v2/%s/blobs/sha256:%s' % (image, blob)
     headers = {"Authorization": "Bearer anonymous"}
     r = requests.get(url, headers=headers, verify=False)

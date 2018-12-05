@@ -1,6 +1,7 @@
 #!/bin.bash
 
 import openstack
+import openstack.exceptions
 import redis
 import json
 
@@ -19,7 +20,11 @@ container = conn.object_store.get_container_metadata('dci_registry')
 for o in conn.object_store.objects(container):
     if redis_session.exists(o.id):
         continue
-    o = conn.object_store.get_object_metadata(o.name, container=container)
+    try:
+        o = conn.object_store.get_object_metadata(o.name, container=container)
+    except openstack.exceptions.ResourceNotFound:
+        print("Cannot stat %s on Swift" % o.name)
+        continue
     print('o.id: %s' % o.id)
     data = {
             'content_length': o.content_length,
