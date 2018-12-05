@@ -1,7 +1,6 @@
 # Usage
 
-- Fetch openstacksdk
-- Apply this patch on openstacksdk: https://review.openstack.org/#/c/621381
+- Fetch openstacksdk (from git)
 - dnf install redis
 - systemctl start redis
 - python refresh_redis_cache.py
