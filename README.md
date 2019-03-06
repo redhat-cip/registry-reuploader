@@ -1,7 +1,26 @@
 # Usage
 
-- Fetch openstacksdk (from git)
-- dnf install redis
-- systemctl start redis
-- python refresh_redis_cache.py
-- python reupload_missing_files.py
+- Install python dependencies (cf. requirements.txt)
+
+```
+pip install -r requirements.txt
+```
+
+- Install & start Redis
+
+```
+yum install redis
+systemctl enable --now redis
+```
+
+- Add your OpenStack credentials you the environment
+
+```
+source ~/openrc.sh
+```
+
+- Run the script, it will update its cache and check for missing blobs
+
+```
+python reupload_missing_files.py
+```

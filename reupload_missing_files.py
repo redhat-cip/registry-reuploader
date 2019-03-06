@@ -1,4 +1,4 @@
-#!/bin.bash
+#!/bin/env python
 
 import hashlib
 import openstack
