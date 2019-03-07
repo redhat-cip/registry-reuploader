@@ -67,7 +67,7 @@ def refresh_cache():
 
 
 def reupload_blobs():
-    for path, blob in empty_blobs(redis_session):
+    for path, blob in empty_blobs():
         image = find_image(blob)
         print('Reuploading %s' % image)
         url = 'https://docker-registry.engineering.redhat.com/v2/%s/blobs/sha256:%s' % (image, blob)
