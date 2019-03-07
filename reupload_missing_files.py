@@ -1,12 +1,24 @@
 #!/bin/env python
 
 import argparse
+import fcntl
 import hashlib
+import json
 import openstack
 import openstack.exceptions
 import redis
 import requests
-import json
+import sys
+
+
+pid_file = '/tmp/reupload_missing_files.lock'
+fp = open(pid_file, 'w')
+try:
+    fcntl.lockf(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except IOError:
+    sys.stderr.write("Another instance of this program is already running\n")
+    sys.exit(1)
+
 
 parser = argparse.ArgumentParser(description='Search for missing container '
                                  'images blobs in swift and upload them')
@@ -50,13 +62,13 @@ def find_image(blob):
         return "%s/%s" % (splitted[5], splitted[6])
 
 
-
 def refresh_cache():
     for o in conn.object_store.objects(container):
         if redis_session.exists(o.id):
             continue
         try:
-            o = conn.object_store.get_object_metadata(o.name, container=container)
+            o = conn.object_store.get_object_metadata(o.name,
+                                                      container=container)
         except openstack.exceptions.ResourceNotFound:
             print("Cannot stat %s on Swift" % o.name)
             continue
@@ -79,7 +91,7 @@ def reupload_blobs():
     for path, blob in empty_blobs():
         image = find_image(blob)
         print('Reuploading %s' % image)
-        url = 'https://docker-registry.engineering.redhat.com/v2/%s/blobs/sha256:%s' % (image, blob)
+        url = 'https://docker-registry.engineering.redhat.com/v2/%s/blobs/sha256:%s' % (image, blob) # noqa
         headers = {"Authorization": "Bearer anonymous"}
         r = requests.get(url, headers=headers, verify=False)
         digest = hashlib.sha256(r.content).hexdigest()
@@ -87,10 +99,10 @@ def reupload_blobs():
             print('Invalid content!: %s %s' % (path, blob))
             continue
 
-        ret = conn.object_store.upload_object(
-                container="dci_registry",
-                name=path,
-                data=r.content)
+        conn.object_store.upload_object(
+            container="dci_registry",
+            name=path,
+            data=r.content)
         redis_session.delete(path)
 
 
