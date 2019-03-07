@@ -1,5 +1,6 @@
 #!/bin/env python
 
+import argparse
 import hashlib
 import openstack
 import openstack.exceptions
@@ -7,15 +8,21 @@ import redis
 import requests
 import json
 
+parser = argparse.ArgumentParser(description='Search for missing container '
+                                 'images blobs in swift and upload them')
+parser.add_argument('--debug', action='store_true')
+args = parser.parse_args()
+
 redis_session = redis.Redis(host='localhost', port=6379, db=0)
 
 # Initialize and turn on debug logging
-openstack.enable_logging(debug=True)
+openstack.enable_logging(debug=args.debug)
 
 # Initialize cloud
 conn = openstack.connect()
 
 container = conn.object_store.get_container_metadata('dci_registry')
+
 
 def empty_blobs():
     for k in redis_session.keys():
@@ -31,6 +38,7 @@ def empty_blobs():
 
         yield (path, path.split('/')[7])
 
+
 def find_image(blob):
     for k in redis_session.keys():
         path = k.decode()
@@ -40,6 +48,7 @@ def find_image(blob):
         if not splitted[9] == blob:
             continue
         return "%s/%s" % (splitted[5], splitted[6])
+
 
 
 def refresh_cache():
