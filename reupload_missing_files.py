@@ -33,8 +33,6 @@ openstack.enable_logging(debug=args.debug)
 # Initialize cloud
 conn = openstack.connect()
 
-container = conn.object_store.get_container_metadata('dci_registry')
-
 
 def empty_blobs():
     for k in redis_session.keys():
@@ -63,6 +61,8 @@ def find_image(blob):
 
 
 def refresh_cache():
+    container = conn.object_store.get_container_metadata('dci_registry')
+
     for o in conn.object_store.objects(container):
         if redis_session.exists(o.id):
             continue
@@ -72,7 +72,7 @@ def refresh_cache():
         except openstack.exceptions.ResourceNotFound:
             print("Cannot stat %s on Swift" % o.name)
             continue
-        print('o.id: %s' % o.id)
+        #print('o.id: %s' % o.id)
         data = {
                 'content_length': o.content_length,
                 'name': o.name,
@@ -86,25 +86,47 @@ def refresh_cache():
                 }
         redis_session.set(o.id, json.dumps(data))
 
+def get_blob_content_v1(image, blob):
+    print("Trying to get the blob from docker-registry.engineering.redhat.com ...")
+    url = 'https://docker-registry.engineering.redhat.com/v2/%s/blobs/sha256:%s' % (image, blob) # noqa
+    headers = {"Authorization": "Bearer anonymous"}
+    r = requests.get(url, headers=headers, verify=False)
+    return r
+
+
+def get_blob_content_v2(image, blob):
+    print("Trying to get the blob from registry-proxy.engineering.redhat.com ...")
+    url = "https://registry-proxy.engineering.redhat.com"
+    ns = "rh-osbs"
+    image = image.replace("/", "-")
+
+    token = requests.get(
+        "%s/v2/auth?scope=repository:%s/%s:pull" % (url, ns, image), verify=False).json()["token"]
+    headers = {"Authorization": "Bearer %s" % token}
+
+    r = requests.get("%s/v2/%s/%s/blobs/sha256:%s" % (url, ns, image, blob), headers=headers, verify=False)
+    return r
 
 def reupload_blobs():
     for path, blob in empty_blobs():
         image = find_image(blob)
-        print('Reuploading %s' % image)
-        url = 'https://docker-registry.engineering.redhat.com/v2/%s/blobs/sha256:%s' % (image, blob) # noqa
-        headers = {"Authorization": "Bearer anonymous"}
-        r = requests.get(url, headers=headers, verify=False)
+        print('Trying to reupload %s ...' % image)
+        r = get_blob_content_v1(image, blob)
         digest = hashlib.sha256(r.content).hexdigest()
         if digest != blob:
-            print('Invalid content!: %s %s' % (path, blob))
-            continue
+            print("Bad response, moving on. HTTP STATUS %d" % r.status_code)
+            r = get_blob_content_v2(image, blob)
 
-        conn.object_store.upload_object(
-            container="dci_registry",
-            name=path,
-            data=r.content)
+            digest = hashlib.sha256(r.content).hexdigest()
+            if digest != blob:
+                print("Bad response, moving on. HTTP STATUS %d" % r.status_code)
+                continue
+
+        print("Success. Now pushing the blob to Swift ...")
+        conn.object_store.upload_object(container="dci_registry", name=path, data=r.content)
         redis_session.delete(path)
+        print("Done.")
 
-
-refresh_cache()
-reupload_blobs()
+if __name__ == "__main__":
+    refresh_cache()
+    reupload_blobs()
